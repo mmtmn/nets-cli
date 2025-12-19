@@ -12,6 +12,7 @@ use nets::{
     ledger::Ledger,
     evolution::evolve,
     persist,
+    league_state::LeagueState,
 };
 
 /* ------------------------------
@@ -113,9 +114,9 @@ pub fn run(system: String, matches: usize, commit: bool) {
     };
 
     let mut ledger = Ledger::new();
-    let mut league_state = nets::league_state::LeagueState::default();
+    let mut league_state = LeagueState::default();
 
-    persist::load("state.json", &mut ledger, &mut league_state);
+    let _persisted = persist::load("state.json", &mut ledger, &mut league_state);
 
     let results =
         run_league(system.clone(), &mut agents, &ledger, &league, &league_cfg);
@@ -130,11 +131,15 @@ pub fn run(system: String, matches: usize, commit: bool) {
         );
     }
 
+    // ---- Compute commitments ----
+    let mut commitments: Vec<(String, [u8; 32])> = Vec::new();
+
     println!("\ncommitments:");
     for agent in agents.iter_mut() {
         let trace = run_match_with_trace(system.clone(), agent);
         let root = trace.merkle.root();
         println!("{} merkle_root={:x?}", agent.id(), root);
+        commitments.push((agent.id(), root));
     }
 
     let mut sorted = results.clone();
@@ -162,8 +167,13 @@ pub fn run(system: String, matches: usize, commit: bool) {
     }
 
     if commit {
-        persist::save("state.json", &ledger, &league_state);
-        println!("\nstate committed");
+        persist::save(
+            "state.json",
+            &ledger,
+            &league_state,
+            commitments,
+        );
+        println!("\nstate + commitments committed");
     } else {
         println!("\ndry run (use --commit to persist)");
     }

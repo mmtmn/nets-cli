@@ -6,7 +6,10 @@ use nets::{
     agent::Agent,
     snake::{SnakeSystem, Dir},
     wasm_agent::WasmAgent,
-    r#match::run_match,
+    match_trace::run_match_with_trace,
+    ledger::Ledger,
+    league_state::LeagueState,
+    persist,
 };
 
 /* ------------------------------
@@ -55,7 +58,7 @@ impl Agent<
 }
 
 /* ------------------------------
-   nets verify
+   nets verify (commitment-aware)
 -------------------------------*/
 
 pub fn verify(agent: String) {
@@ -69,33 +72,39 @@ pub fn verify(agent: String) {
 
     let wasm = fs::read(&wasm_path).expect("failed to read wasm");
 
-    let mut agent_a = SnakeWasmAgent {
-        inner: WasmAgent::load(agent.clone(), &wasm)
-            .expect("failed to load agent"),
-    };
+    let mut ledger = Ledger::new();
+    let mut league_state = LeagueState::default();
+    let state = persist::load("state.json", &mut ledger, &mut league_state);
 
-    let mut agent_b = SnakeWasmAgent {
+    let expected_root = state
+        .commitments
+        .iter()
+        .find(|(id, _)| id == &agent)
+        .map(|(_, root)| *root)
+        .unwrap_or_else(|| {
+            eprintln!("no committed root found for agent {}", agent);
+            std::process::exit(1);
+        });
+
+    let mut agent_instance = SnakeWasmAgent {
         inner: WasmAgent::load(agent.clone(), &wasm)
             .expect("failed to load agent"),
     };
 
     let system = SnakeSystem::new(10, 10, 300);
+    let trace = run_match_with_trace(system, &mut agent_instance);
+    let recomputed_root = trace.merkle.root();
 
-    let result_a = run_match(system.clone(), &mut agent_a);
-    let result_b = run_match(system.clone(), &mut agent_b);
-
-    if result_a.score != result_b.score {
+    if recomputed_root != expected_root {
         eprintln!(
-            "verification failed: score mismatch ({} vs {})",
-            result_a.score,
-            result_b.score
+            "verification failed: merkle root mismatch\nexpected={:x?}\nactual={:x?}",
+            expected_root, recomputed_root
         );
         std::process::exit(1);
     }
 
     println!(
-        "verification ok: agent={} score={}",
-        agent,
-        result_a.score
+        "verification ok: agent={} merkle_root={:x?}",
+        agent, recomputed_root
     );
 }
