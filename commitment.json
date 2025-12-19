@@ -1,0 +1,10 @@
+{
+  "system": "snake",
+  "agent": "agent_a",
+  "merkle_root": "6183c14edb786770b60e902e62de49632457a8b19a2bb6b79bbcc1a5a6e18357",
+  "system_params": {
+    "width": 10,
+    "height": 10,
+    "steps": 300
+  }
+}

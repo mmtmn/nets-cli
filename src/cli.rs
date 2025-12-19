@@ -23,10 +23,28 @@ pub enum Command {
         commit: bool,
     },
 
-    /// Verify a previously run match or league
+    /// Verify an agent against locally committed state
     Verify {
         #[arg(long)]
         agent: String,
+    },
+
+    /// Export a commitment for remote verification
+    Export {
+        #[arg(long)]
+        agent: String,
+
+        #[arg(long)]
+        out: String,
+    },
+
+    /// Verify a commitment independently (remote verifier mode)
+    VerifyRemote {
+        #[arg(long)]
+        commitment: String,
+
+        #[arg(long)]
+        agent_wasm: String,
     },
 
     /// Agent-related commands
