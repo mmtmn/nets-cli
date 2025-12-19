@@ -13,10 +13,13 @@ use nets::{
 
     snake::SnakeSystem,
     chess::ChessSystem,
+    rps::RpsSystem,
 };
 
 use crate::commands::snake_agent::SnakeWasmAgent;
 use crate::commands::chess_agent::ChessWasmAgent;
+use crate::commands::rps_agent::RpsWasmAgent;
+
 use crate::wallet::mock::MockWalletAdapter;
 use crate::wallet::adapter::WalletAdapter;
 
@@ -109,6 +112,57 @@ pub fn run(system: String, matches: usize, commit: bool, wallet: Option<String>)
             }
 
             let system = ChessSystem::new(200);
+            let results = run_league(system.clone(), &mut agents, &ledger, &league, &league_cfg);
+
+            println!("\nresults:");
+            for r in &results {
+                println!(
+                    "{} total_score={} matches={}",
+                    r.agent_id,
+                    r.total_score,
+                    r.matches.len()
+                );
+            }
+
+            let mut commitments = Vec::new();
+            println!("\ncommitments:");
+            for agent in agents.iter_mut() {
+                let trace = run_match_with_trace(system.clone(), agent);
+                let root = trace.merkle.root();
+                println!("{} merkle_root={:x?}", agent.id(), root);
+                commitments.push((agent.id(), root));
+            }
+
+            settle_and_persist(
+                results,
+                &mut ledger,
+                &mut wallet_adapter,
+                &mut league_state,
+                commitments,
+                commit,
+            );
+        }
+
+        /* =======================
+           ROCK PAPER SCISSORS
+        ======================= */
+        "rps" => {
+            let mut agents = Vec::new();
+
+            for entry in fs::read_dir(agents_dir).unwrap() {
+                let path = entry.unwrap().path();
+                if path.extension().and_then(|s| s.to_str()) != Some("wasm") {
+                    continue;
+                }
+
+                let id = path.file_stem().unwrap().to_string_lossy().to_string();
+                let wasm = fs::read(&path).unwrap();
+
+                wallet_adapter.bind_agent(&id, &run_wallet);
+                agents.push(RpsWasmAgent::load(id, &wasm));
+            }
+
+            let system = RpsSystem::new(100);
             let results = run_league(system.clone(), &mut agents, &ledger, &league, &league_cfg);
 
             println!("\nresults:");

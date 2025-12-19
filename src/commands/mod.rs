@@ -12,6 +12,7 @@ pub mod balance;
 
 pub mod snake_agent;
 pub mod chess_agent;
+pub mod rps_agent;
 
 pub mod commitment;
 pub mod fraud_helpers;
