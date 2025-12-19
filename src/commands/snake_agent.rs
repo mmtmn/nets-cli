@@ -6,7 +6,15 @@ use nets::{
 };
 
 pub struct SnakeWasmAgent {
-    pub inner: WasmAgent,
+    inner: WasmAgent,
+}
+
+impl SnakeWasmAgent {
+    pub fn load(agent_id: String, wasm: &[u8]) -> Self {
+        let inner = WasmAgent::load(agent_id, wasm)
+            .expect("failed to load wasm agent");
+        Self { inner }
+    }
 }
 
 fn u64_to_dir(v: u64) -> Dir {

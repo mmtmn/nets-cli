@@ -4,6 +4,7 @@ pub mod run;
 pub mod verify;
 pub mod export;
 pub mod verify_remote;
+pub mod slash;
 pub mod agent;
 pub mod balance;
 
@@ -12,8 +13,8 @@ pub mod commitment;
 
 pub fn dispatch(cli: Cli) {
     match cli.command {
-        Command::Run { system, matches, commit } => {
-            run::run(system, matches, commit);
+        Command::Run { system, matches, commit, wallet } => {
+            run::run(system, matches, commit, wallet);
         }
 
         Command::Verify { agent } => {
@@ -28,12 +29,16 @@ pub fn dispatch(cli: Cli) {
             verify_remote::verify_remote(commitment, agent_wasm);
         }
 
+        Command::Slash { agent, amount } => {
+            slash::slash(agent, amount);
+        }
+
         Command::Agent { action } => {
             agent::handle(action);
         }
 
-        Command::Balance { agent } => {
-            balance::show(agent);
+        Command::Balance { agent, wallet } => {
+            balance::show(agent, wallet);
         }
     }
 }

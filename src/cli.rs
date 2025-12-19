@@ -21,6 +21,10 @@ pub enum Command {
         /// Commit results to persistent ledger
         #[arg(long)]
         commit: bool,
+
+        /// Wallet ID that owns all agents in this run
+        #[arg(long)]
+        wallet: Option<String>,
     },
 
     /// Verify an agent against locally committed state
@@ -47,16 +51,28 @@ pub enum Command {
         agent_wasm: String,
     },
 
+    /// Manually slash an agent (mirrors into wallet)
+    Slash {
+        #[arg(long)]
+        agent: String,
+
+        #[arg(long)]
+        amount: u64,
+    },
+
     /// Agent-related commands
     Agent {
         #[command(subcommand)]
         action: AgentCommand,
     },
 
-    /// Show balances for agents
+    /// Show balances for agents and wallets
     Balance {
         #[arg(long)]
         agent: Option<String>,
+
+        #[arg(long)]
+        wallet: Option<String>,
     },
 }
 

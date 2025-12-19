@@ -2,10 +2,8 @@ use std::fs;
 use std::path::Path;
 
 use nets::{
-    system::System,
     agent::Agent,
-    snake::{SnakeSystem, Dir},
-    wasm_agent::WasmAgent,
+    snake::SnakeSystem,
     match_trace::run_match_with_trace,
     league::League,
     league_runner::{run_league, LeagueConfig},
@@ -15,56 +13,15 @@ use nets::{
     league_state::LeagueState,
 };
 
-/* ------------------------------
-   Action decoding
--------------------------------*/
-
-fn u64_to_dir(v: u64) -> Dir {
-    match v % 4 {
-        0 => Dir::Up,
-        1 => Dir::Down,
-        2 => Dir::Left,
-        _ => Dir::Right,
-    }
-}
-
-/* ------------------------------
-   WASM Snake Adapter
--------------------------------*/
-
-struct SnakeWasmAgent {
-    inner: WasmAgent,
-}
-
-impl Agent<
-    <SnakeSystem as System>::Observation,
-    <SnakeSystem as System>::Action,
-> for SnakeWasmAgent {
-    fn id(&self) -> String {
-        self.inner.id.clone()
-    }
-
-    fn decide(
-        &mut self,
-        obs: <SnakeSystem as System>::Observation,
-    ) -> <SnakeSystem as System>::Action {
-        let ((hx, hy), (ax, ay), _) = obs;
-
-        let packed =
-            ((hx as u64 & 0xFF) << 24)
-            | ((hy as u64 & 0xFF) << 16)
-            | ((ax as u64 & 0xFF) << 8)
-            | (ay as u64 & 0xFF);
-
-        u64_to_dir(self.inner.decide(packed))
-    }
-}
+use crate::wallet::mock::MockWalletAdapter;
+use crate::commands::snake_agent::SnakeWasmAgent;
+use crate::wallet::adapter::WalletAdapter;
 
 /* ------------------------------
    nets run
 -------------------------------*/
 
-pub fn run(system: String, matches: usize, commit: bool) {
+pub fn run(system: String, matches: usize, commit: bool, wallet: Option<String>) {
     if system != "snake" {
         eprintln!("only system=snake is supported right now");
         std::process::exit(1);
@@ -86,20 +43,10 @@ pub fn run(system: String, matches: usize, commit: bool) {
             continue;
         }
 
-        let agent_id = path
-            .file_stem()
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
-
+        let agent_id = path.file_stem().unwrap().to_string_lossy().to_string();
         let wasm = fs::read(&path).expect("failed to read wasm");
 
-        let agent = SnakeWasmAgent {
-            inner: WasmAgent::load(agent_id.clone(), &wasm)
-                .expect("failed to load wasm agent"),
-        };
-
-        agents.push(agent);
+        agents.push(SnakeWasmAgent::load(agent_id, &wasm));
     }
 
     if agents.is_empty() {
@@ -109,29 +56,30 @@ pub fn run(system: String, matches: usize, commit: bool) {
 
     let system = SnakeSystem::new(10, 10, 300);
     let league = League::bronze();
-    let league_cfg = LeagueConfig {
-        matches_per_agent: matches,
-    };
+    let league_cfg = LeagueConfig { matches_per_agent: matches };
 
     let mut ledger = Ledger::new();
     let mut league_state = LeagueState::default();
 
-    let _persisted = persist::load("state.json", &mut ledger, &mut league_state);
+    // Load existing protocol state
+    let _ = persist::load("state.json", &mut ledger, &mut league_state);
 
-    let results =
-        run_league(system.clone(), &mut agents, &ledger, &league, &league_cfg);
+    // ---- Wallet adapter (CLI-only) ----
+    let mut wallet_adapter = MockWalletAdapter::load("state.json");
+    let run_wallet = wallet.unwrap_or_else(|| "default".to_string());
+
+    for a in &agents {
+        wallet_adapter.bind_agent(&a.id(), &run_wallet);
+    }
+
+    let results = run_league(system.clone(), &mut agents, &ledger, &league, &league_cfg);
 
     println!("\nresults:");
     for r in &results {
-        println!(
-            "{} total_score={} matches={}",
-            r.agent_id,
-            r.total_score,
-            r.matches.len()
-        );
+        println!("{} total_score={} matches={}", r.agent_id, r.total_score, r.matches.len());
     }
 
-    // ---- Compute commitments ----
+    // ---- Commitments ----
     let mut commitments: Vec<(String, [u8; 32])> = Vec::new();
 
     println!("\ncommitments:");
@@ -163,17 +111,14 @@ pub fn run(system: String, matches: usize, commit: bool) {
 
         if commit {
             ledger.credit(&r.agent_id, reward);
+            wallet_adapter.credit(&r.agent_id, reward);
         }
     }
 
     if commit {
-        persist::save(
-            "state.json",
-            &ledger,
-            &league_state,
-            commitments,
-        );
-        println!("\nstate + commitments committed");
+        persist::save("state.json", &ledger, &league_state, commitments);
+        wallet_adapter.save("state.json");
+        println!("\nstate + commitments + wallets committed");
     } else {
         println!("\ndry run (use --commit to persist)");
     }
