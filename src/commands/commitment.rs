@@ -14,3 +14,11 @@ pub struct SystemParams {
     pub height: i32,
     pub steps: u64,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct FraudProofEnvelope {
+    pub agent: String,
+    pub system: String,
+    pub committed_root: String,
+    pub proof: nets::fraud::TraceStepProof,
+}

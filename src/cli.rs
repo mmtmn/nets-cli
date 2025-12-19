@@ -10,67 +10,72 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Run a local league
     Run {
         #[arg(long, default_value = "snake")]
         system: String,
-
         #[arg(long, default_value_t = 1)]
         matches: usize,
-
-        /// Commit results to persistent ledger
         #[arg(long)]
         commit: bool,
-
-        /// Wallet ID that owns all agents in this run
         #[arg(long)]
         wallet: Option<String>,
     },
 
-    /// Verify an agent against locally committed state
     Verify {
         #[arg(long)]
         agent: String,
     },
 
-    /// Export a commitment for remote verification
     Export {
         #[arg(long)]
         agent: String,
-
         #[arg(long)]
         out: String,
     },
 
-    /// Verify a commitment independently (remote verifier mode)
     VerifyRemote {
         #[arg(long)]
         commitment: String,
-
         #[arg(long)]
         agent_wasm: String,
     },
 
-    /// Manually slash an agent (mirrors into wallet)
+    /// Generate a step-level fraud proof
+    ProveFraud {
+        #[arg(long)]
+        commitment: String,
+        #[arg(long)]
+        agent_wasm: String,
+        #[arg(long)]
+        out: Option<String>,
+        /// Automatically slash the agent if fraud is proven
+        #[arg(long)]
+        slash: bool,
+    },
+
+    /// Verify a step-level fraud proof against a commitment
+    VerifyFraud {
+        #[arg(long)]
+        commitment: String,
+        #[arg(long)]
+        proof: String,
+    },
+
     Slash {
         #[arg(long)]
         agent: String,
-
         #[arg(long)]
         amount: u64,
     },
 
-    /// Agent-related commands
     Agent {
         #[command(subcommand)]
         action: AgentCommand,
     },
 
-    /// Show balances for agents and wallets
     Balance {
         #[arg(long)]
         agent: Option<String>,
-
         #[arg(long)]
         wallet: Option<String>,
     },
@@ -78,7 +83,6 @@ pub enum Command {
 
 #[derive(Subcommand)]
 pub enum AgentCommand {
-    /// Build a guest WASM agent
     Build {
         #[arg(long)]
         path: String,
